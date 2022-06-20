@@ -25,7 +25,7 @@ declare module "simple-socks" {
 
     export interface SocksServerOptions {
         authentication?: (username: string, password: string, socket: net.Socket, callback: (err?: any) => void) => void;
-        connectionFilter?: (destination: SocksConnectionInfo, origin: SocksConnectionInfo, callback: (err?: any, dest: stream.Duplex) => void) => void;
+        connectionFilter?: (destination: SocksConnectionInfo, origin: SocksConnectionInfo, callback: (err?: any, dest?: stream.Duplex) => void) => void;
     }
 
     export const events: SocksServerEvents;
