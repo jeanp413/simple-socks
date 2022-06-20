@@ -3,6 +3,7 @@
   "version": "2.2.2",
   "description": "proxies requests ",
   "main": "dist/socks5.js",
+  "types": "types/socks5.d.ts",
   "scripts": {
     "build": "gulp build",
     "lint": "gulp lint",
