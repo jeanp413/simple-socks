@@ -233,42 +233,26 @@ class SocksServer {
 									address : socket.remoteAddress,
 									port : socket.remotePort
 								},
-								connectionFilterDomain.intercept(() => {
-									let
-										destination = net.createConnection(
-											args.dst.port,
-											args.dst.addr,
-											() => {
-												// prepare a success response
-												let responseBuffer = Buffer.alloc(args.requestBuffer.length);
-												args.requestBuffer.copy(responseBuffer);
-												responseBuffer[1] = RFC_1928_REPLIES.SUCCEEDED;
+								connectionFilterDomain.intercept((destination) => {
+									const sendSuccessResponse = (dest) => {
+										// prepare a success response
+										let responseBuffer = Buffer.alloc(args.requestBuffer.length);
+										args.requestBuffer.copy(responseBuffer);
+										responseBuffer[1] = RFC_1928_REPLIES.SUCCEEDED;
 
-												// write acknowledgement to client...
-												socket.write(responseBuffer, () => {
-													// listen for data bi-directionally
-													destination.pipe(socket);
-													socket.pipe(destination);
-												});
-											}),
-										destinationInfo = {
-											address : args.dst.addr,
-											port : args.dst.port
-										},
-										originInfo = {
-											address : socket.remoteAddress,
-											port : socket.remotePort
-										};
-
-									// capture successful connection
-									destination.on('connect', () => {
-										// emit connection event
-										self.server.emit(EVENTS.PROXY_CONNECT, destinationInfo, destination);
-
-										// capture and emit proxied connection data
-										destination.on('data', (data) => {
-											self.server.emit(EVENTS.PROXY_DATA, data);
+										// write acknowledgement to client...
+										socket.write(responseBuffer, () => {
+											// listen for data bi-directionally
+											dest.pipe(socket);
+											socket.pipe(dest);
 										});
+									}
+
+									if (destination) {
+										// exit the connection filter domain
+										connectionFilterDomain.exit();
+
+										sendSuccessResponse(destination);
 
 										// capture close of destination and emit pending disconnect
 										// note: this event is only emitted once the destination socket is fully closed
@@ -277,31 +261,74 @@ class SocksServer {
 											self.server.emit(EVENTS.PROXY_DISCONNECT, originInfo, destinationInfo, hadError);
 										});
 
-										connectionFilterDomain.exit();
-									});
-
-									// capture connection errors and response appropriately
-									destination.on('error', (err) => {
-										// exit the connection filter domain
-										connectionFilterDomain.exit();
-
-										// notify of connection error
-										err.addr = args.dst.addr;
-										err.atyp = args.atyp;
-										err.port = args.dst.port;
-
-										self.server.emit(EVENTS.PROXY_ERROR, err);
-
-										if (err.code && err.code === 'EADDRNOTAVAIL') {
-											return end(RFC_1928_REPLIES.HOST_UNREACHABLE, args);
-										}
-
-										if (err.code && err.code === 'ECONNREFUSED') {
-											return end(RFC_1928_REPLIES.CONNECTION_REFUSED, args);
-										}
-
-										return end(RFC_1928_REPLIES.NETWORK_UNREACHABLE, args);
-									});
+										// capture connection errors and response appropriately
+										destination.on('error', (err) => {
+											// notify of connection error
+											err.addr = args.dst.addr;
+											err.atyp = args.atyp;
+											err.port = args.dst.port;
+	
+											self.server.emit(EVENTS.PROXY_ERROR, err);
+	
+											return end(RFC_1928_REPLIES.NETWORK_UNREACHABLE, args);
+										});
+									} else {							
+										destination = net.createConnection(
+												args.dst.port,
+												args.dst.addr,
+												() => sendSuccessResponse(destination)),
+											destinationInfo = {
+												address : args.dst.addr,
+												port : args.dst.port
+											},
+											originInfo = {
+												address : socket.remoteAddress,
+												port : socket.remotePort
+											};
+	
+										// capture successful connection
+										destination.on('connect', () => {
+											// emit connection event
+											self.server.emit(EVENTS.PROXY_CONNECT, destinationInfo, destination);
+	
+											// capture and emit proxied connection data
+											destination.on('data', (data) => {
+												self.server.emit(EVENTS.PROXY_DATA, data);
+											});
+	
+											// capture close of destination and emit pending disconnect
+											// note: this event is only emitted once the destination socket is fully closed
+											destination.on('close', (hadError) => {
+												// indicate client connection end
+												self.server.emit(EVENTS.PROXY_DISCONNECT, originInfo, destinationInfo, hadError);
+											});
+	
+											connectionFilterDomain.exit();
+										});
+	
+										// capture connection errors and response appropriately
+										destination.on('error', (err) => {
+											// exit the connection filter domain
+											connectionFilterDomain.exit();
+	
+											// notify of connection error
+											err.addr = args.dst.addr;
+											err.atyp = args.atyp;
+											err.port = args.dst.port;
+	
+											self.server.emit(EVENTS.PROXY_ERROR, err);
+	
+											if (err.code && err.code === 'EADDRNOTAVAIL') {
+												return end(RFC_1928_REPLIES.HOST_UNREACHABLE, args);
+											}
+	
+											if (err.code && err.code === 'ECONNREFUSED') {
+												return end(RFC_1928_REPLIES.CONNECTION_REFUSED, args);
+											}
+	
+											return end(RFC_1928_REPLIES.NETWORK_UNREACHABLE, args);
+										});
+									}
 								}));
 						} else {
 							// bind and udp associate commands
