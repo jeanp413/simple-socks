@@ -248,6 +248,15 @@ class SocksServer {
 										});
 									}
 
+									let destinationInfo = {
+										address : args.dst.addr,
+										port : args.dst.port
+									},
+									originInfo = {
+										address : socket.remoteAddress,
+										port : socket.remotePort
+									};
+
 									if (destination) {
 										// exit the connection filter domain
 										connectionFilterDomain.exit();
@@ -276,15 +285,7 @@ class SocksServer {
 										destination = net.createConnection(
 												args.dst.port,
 												args.dst.addr,
-												() => sendSuccessResponse(destination)),
-											destinationInfo = {
-												address : args.dst.addr,
-												port : args.dst.port
-											},
-											originInfo = {
-												address : socket.remoteAddress,
-												port : socket.remotePort
-											};
+												() => sendSuccessResponse(destination));
 	
 										// capture successful connection
 										destination.on('connect', () => {
